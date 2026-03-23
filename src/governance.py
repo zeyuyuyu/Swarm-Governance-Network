@@ -1,131 +1,114 @@
-from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from enum import Enum
+from datetime import datetime, timedelta
 
 class ProposalStatus(Enum):
     DRAFT = 'draft'
-    ACTIVE = 'active'
+    ACTIVE = 'active' 
     PASSED = 'passed'
     FAILED = 'failed'
     EXECUTED = 'executed'
 
 class Proposal:
-    def __init__(self, id: str, title: str, description: str, creator: str):
+    def __init__(self, id: str, title: str, description: str, creator: str, 
+                 voting_period_days: int = 7):
         self.id = id
         self.title = title
         self.description = description
         self.creator = creator
         self.status = ProposalStatus.DRAFT
-        self.votes_for = 0
-        self.votes_against = 0
-        self.start_time: Optional[datetime] = None
-        self.end_time: Optional[datetime] = None
-        self.voters: Dict[str, float] = {}
+        self.created_at = datetime.now()
+        self.voting_end = self.created_at + timedelta(days=voting_period_days)
+        self.votes_for: Dict[str, float] = {}
+        self.votes_against: Dict[str, float] = {}
+        
+    def get_vote_tallies(self) -> tuple[float, float]:
+        return (sum(self.votes_for.values()), sum(self.votes_against.values()))
 
 class GovernanceSystem:
     def __init__(self):
         self.proposals: Dict[str, Proposal] = {}
-        self.member_weights: Dict[str, float] = {}
-        self.voting_period = timedelta(days=7)
-        self.approval_threshold = 0.66  # 66% majority required
-
-    def create_proposal(self, id: str, title: str, description: str, creator: str) -> Proposal:
+        self.stake_weights: Dict[str, float] = {}
+        self.quorum_threshold = 0.4  # 40% of total stake needed
+        self.pass_threshold = 0.6    # 60% yes votes needed to pass
+        
+    def register_stake(self, address: str, stake_amount: float) -> None:
+        """Register or update a participant's voting weight based on stake"""
+        self.stake_weights[address] = stake_amount
+        
+    def create_proposal(self, id: str, title: str, description: str, 
+                       creator: str) -> Proposal:
+        """Create a new governance proposal"""
         if id in self.proposals:
             raise ValueError(f'Proposal with ID {id} already exists')
-        
+            
         proposal = Proposal(id, title, description, creator)
         self.proposals[id] = proposal
         return proposal
-
+        
     def activate_proposal(self, proposal_id: str) -> None:
+        """Move proposal from draft to active voting state"""
         proposal = self.proposals.get(proposal_id)
         if not proposal:
             raise ValueError(f'Proposal {proposal_id} not found')
             
         proposal.status = ProposalStatus.ACTIVE
-        proposal.start_time = datetime.now()
-        proposal.end_time = proposal.start_time + self.voting_period
-
-    def cast_vote(self, proposal_id: str, voter: str, support: bool) -> None:
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-            
-        if proposal.status != ProposalStatus.ACTIVE:
-            raise ValueError('Proposal is not active')
-            
-        if datetime.now() > proposal.end_time:
-            raise ValueError('Voting period has ended')
-
-        voter_weight = self.member_weights.get(voter, 1.0)
         
-        # Remove previous vote if exists
-        if voter in proposal.voters:
-            old_weight = proposal.voters[voter]
-            if proposal.voters[voter] > 0:
-                proposal.votes_for -= old_weight
-            else:
-                proposal.votes_against -= abs(old_weight)
-
-        # Add new vote
-        if support:
-            proposal.votes_for += voter_weight
-            proposal.voters[voter] = voter_weight
-        else:
-            proposal.votes_against += voter_weight
-            proposal.voters[voter] = -voter_weight
-
-    def check_proposal_status(self, proposal_id: str) -> None:
+    def cast_vote(self, proposal_id: str, voter: str, support: bool) -> None:
+        """Cast a weighted vote on an active proposal"""
         proposal = self.proposals.get(proposal_id)
         if not proposal:
             raise ValueError(f'Proposal {proposal_id} not found')
-
+            
         if proposal.status != ProposalStatus.ACTIVE:
-            return
-
-        if datetime.now() <= proposal.end_time:
-            return
-
-        total_votes = proposal.votes_for + proposal.votes_against
-        if total_votes == 0:
+            raise ValueError(f'Proposal {proposal_id} is not active')
+            
+        if datetime.now() > proposal.voting_end:
+            raise ValueError(f'Voting period has ended for proposal {proposal_id}')
+            
+        weight = self.stake_weights.get(voter, 0)
+        if weight == 0:
+            raise ValueError(f'Voter {voter} has no stake weight')
+            
+        if support:
+            proposal.votes_for[voter] = weight
+        else:
+            proposal.votes_against[voter] = weight
+            
+    def process_proposal(self, proposal_id: str) -> None:
+        """Process proposal after voting period to determine outcome"""
+        proposal = self.proposals.get(proposal_id)
+        if not proposal:
+            raise ValueError(f'Proposal {proposal_id} not found')
+            
+        if proposal.status != ProposalStatus.ACTIVE:
+            raise ValueError(f'Proposal {proposal_id} is not active')
+            
+        if datetime.now() < proposal.voting_end:
+            raise ValueError(f'Voting period still active for {proposal_id}')
+            
+        total_stake = sum(self.stake_weights.values())
+        votes_for, votes_against = proposal.get_vote_tallies()
+        total_votes = votes_for + votes_against
+        
+        # Check quorum
+        if total_votes < (total_stake * self.quorum_threshold):
             proposal.status = ProposalStatus.FAILED
             return
-
-        approval_rate = proposal.votes_for / total_votes
-        if approval_rate >= self.approval_threshold:
+            
+        # Check pass threshold
+        if votes_for / total_votes >= self.pass_threshold:
             proposal.status = ProposalStatus.PASSED
         else:
             proposal.status = ProposalStatus.FAILED
-
+            
     def execute_proposal(self, proposal_id: str) -> None:
+        """Mark proposal as executed after implementation"""
         proposal = self.proposals.get(proposal_id)
         if not proposal:
             raise ValueError(f'Proposal {proposal_id} not found')
-
+            
         if proposal.status != ProposalStatus.PASSED:
-            raise ValueError('Proposal must be passed before execution')
-
-        # Execute proposal logic here
+            raise ValueError(f'Proposal {proposal_id} has not passed')
+            
         proposal.status = ProposalStatus.EXECUTED
-
-    def set_member_weight(self, member: str, weight: float) -> None:
-        if weight < 0:
-            raise ValueError('Weight cannot be negative')
-        self.member_weights[member] = weight
-
-    def get_proposal_results(self, proposal_id: str) -> dict:
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-
-        total_votes = proposal.votes_for + proposal.votes_against
-        approval_rate = proposal.votes_for / total_votes if total_votes > 0 else 0
-
-        return {
-            'id': proposal.id,
-            'status': proposal.status.value,
-            'votes_for': proposal.votes_for,
-            'votes_against': proposal.votes_against,
-            'approval_rate': approval_rate,
-            'total_votes': total_votes
-        }
