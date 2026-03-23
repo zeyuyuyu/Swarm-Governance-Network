@@ -1,114 +1,53 @@
-from typing import Dict, List, Optional
-from enum import Enum
-from datetime import datetime, timedelta
+import os
+import json
+from typing import List, Dict
 
-class ProposalStatus(Enum):
-    DRAFT = 'draft'
-    ACTIVE = 'active' 
-    PASSED = 'passed'
-    FAILED = 'failed'
-    EXECUTED = 'executed'
+class GovernanceEngine:
+    def __init__(self, config_path: str):
+        self.config = self._load_config(config_path)
+        self.proposals: List[Proposal] = []
+        self.votes: Dict[str, Dict[str, int]] = {}
+
+    def _load_config(self, config_path: str) -> Dict:
+        with open(config_path, 'r') as f:
+            return json.load(f)
+
+    def add_proposal(self, proposal: Proposal):
+        self.proposals.append(proposal)
+
+    def cast_vote(self, voter_id: str, proposal_id: str, vote: int):
+        if proposal_id not in self.votes:
+            self.votes[proposal_id] = {}
+        self.votes[proposal_id][voter_id] = vote
+
+    def tally_votes(self, proposal_id: str) -> int:
+        vote_counts = self.votes.get(proposal_id, {})
+        yes_votes = sum(1 for v in vote_counts.values() if v == 1)
+        no_votes = sum(1 for v in vote_counts.values() if v == -1)
+        return yes_votes - no_votes
+
+    def execute_proposal(self, proposal_id: str):
+        proposal = next((p for p in self.proposals if p.id == proposal_id), None)
+        if proposal and self.tally_votes(proposal_id) >= self.config['min_approval_threshold']:
+            proposal.execute()
 
 class Proposal:
-    def __init__(self, id: str, title: str, description: str, creator: str, 
-                 voting_period_days: int = 7):
+    def __init__(self, id: str, description: str, execute_func: callable):
         self.id = id
-        self.title = title
         self.description = description
-        self.creator = creator
-        self.status = ProposalStatus.DRAFT
-        self.created_at = datetime.now()
-        self.voting_end = self.created_at + timedelta(days=voting_period_days)
-        self.votes_for: Dict[str, float] = {}
-        self.votes_against: Dict[str, float] = {}
-        
-    def get_vote_tallies(self) -> tuple[float, float]:
-        return (sum(self.votes_for.values()), sum(self.votes_against.values()))
+        self.execute = execute_func
 
-class GovernanceSystem:
-    def __init__(self):
-        self.proposals: Dict[str, Proposal] = {}
-        self.stake_weights: Dict[str, float] = {}
-        self.quorum_threshold = 0.4  # 40% of total stake needed
-        self.pass_threshold = 0.6    # 60% yes votes needed to pass
-        
-    def register_stake(self, address: str, stake_amount: float) -> None:
-        """Register or update a participant's voting weight based on stake"""
-        self.stake_weights[address] = stake_amount
-        
-    def create_proposal(self, id: str, title: str, description: str, 
-                       creator: str) -> Proposal:
-        """Create a new governance proposal"""
-        if id in self.proposals:
-            raise ValueError(f'Proposal with ID {id} already exists')
-            
-        proposal = Proposal(id, title, description, creator)
-        self.proposals[id] = proposal
-        return proposal
-        
-    def activate_proposal(self, proposal_id: str) -> None:
-        """Move proposal from draft to active voting state"""
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-            
-        proposal.status = ProposalStatus.ACTIVE
-        
-    def cast_vote(self, proposal_id: str, voter: str, support: bool) -> None:
-        """Cast a weighted vote on an active proposal"""
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-            
-        if proposal.status != ProposalStatus.ACTIVE:
-            raise ValueError(f'Proposal {proposal_id} is not active')
-            
-        if datetime.now() > proposal.voting_end:
-            raise ValueError(f'Voting period has ended for proposal {proposal_id}')
-            
-        weight = self.stake_weights.get(voter, 0)
-        if weight == 0:
-            raise ValueError(f'Voter {voter} has no stake weight')
-            
-        if support:
-            proposal.votes_for[voter] = weight
-        else:
-            proposal.votes_against[voter] = weight
-            
-    def process_proposal(self, proposal_id: str) -> None:
-        """Process proposal after voting period to determine outcome"""
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-            
-        if proposal.status != ProposalStatus.ACTIVE:
-            raise ValueError(f'Proposal {proposal_id} is not active')
-            
-        if datetime.now() < proposal.voting_end:
-            raise ValueError(f'Voting period still active for {proposal_id}')
-            
-        total_stake = sum(self.stake_weights.values())
-        votes_for, votes_against = proposal.get_vote_tallies()
-        total_votes = votes_for + votes_against
-        
-        # Check quorum
-        if total_votes < (total_stake * self.quorum_threshold):
-            proposal.status = ProposalStatus.FAILED
-            return
-            
-        # Check pass threshold
-        if votes_for / total_votes >= self.pass_threshold:
-            proposal.status = ProposalStatus.PASSED
-        else:
-            proposal.status = ProposalStatus.FAILED
-            
-    def execute_proposal(self, proposal_id: str) -> None:
-        """Mark proposal as executed after implementation"""
-        proposal = self.proposals.get(proposal_id)
-        if not proposal:
-            raise ValueError(f'Proposal {proposal_id} not found')
-            
-        if proposal.status != ProposalStatus.PASSED:
-            raise ValueError(f'Proposal {proposal_id} has not passed')
-            
-        proposal.status = ProposalStatus.EXECUTED
+if __name__ == '__main__':
+    config_path = os.path.join(os.path.dirname(__file__), 'governance_config.json')
+    engine = GovernanceEngine(config_path)
+
+    def execute_example_proposal():
+        print('Executing example proposal...')
+
+    example_proposal = Proposal('example_proposal', 'Example Proposal', execute_example_proposal)
+    engine.add_proposal(example_proposal)
+
+    engine.cast_vote('user1', 'example_proposal', 1)
+    engine.cast_vote('user2', 'example_proposal', -1)
+
+    engine.execute_proposal('example_proposal')
