@@ -1,53 +1,124 @@
-import os
-import json
-from typing import List, Dict
+from typing import Dict, List, Optional
+from dataclasses import dataclass
+from datetime import datetime
 
-class GovernanceEngine:
-    def __init__(self, config_path: str):
-        self.config = self._load_config(config_path)
-        self.proposals: List[Proposal] = []
-        self.votes: Dict[str, Dict[str, int]] = {}
+@dataclass
+class Vote:
+    voter: str
+    proposal_id: int
+    vote_weight: float
+    timestamp: datetime
+    choice: bool  # True for yes, False for no
 
-    def _load_config(self, config_path: str) -> Dict:
-        with open(config_path, 'r') as f:
-            return json.load(f)
-
-    def add_proposal(self, proposal: Proposal):
-        self.proposals.append(proposal)
-
-    def cast_vote(self, voter_id: str, proposal_id: str, vote: int):
-        if proposal_id not in self.votes:
-            self.votes[proposal_id] = {}
-        self.votes[proposal_id][voter_id] = vote
-
-    def tally_votes(self, proposal_id: str) -> int:
-        vote_counts = self.votes.get(proposal_id, {})
-        yes_votes = sum(1 for v in vote_counts.values() if v == 1)
-        no_votes = sum(1 for v in vote_counts.values() if v == -1)
-        return yes_votes - no_votes
-
-    def execute_proposal(self, proposal_id: str):
-        proposal = next((p for p in self.proposals if p.id == proposal_id), None)
-        if proposal and self.tally_votes(proposal_id) >= self.config['min_approval_threshold']:
-            proposal.execute()
-
+@dataclass 
 class Proposal:
-    def __init__(self, id: str, description: str, execute_func: callable):
-        self.id = id
-        self.description = description
-        self.execute = execute_func
-
-if __name__ == '__main__':
-    config_path = os.path.join(os.path.dirname(__file__), 'governance_config.json')
-    engine = GovernanceEngine(config_path)
-
-    def execute_example_proposal():
-        print('Executing example proposal...')
-
-    example_proposal = Proposal('example_proposal', 'Example Proposal', execute_example_proposal)
-    engine.add_proposal(example_proposal)
-
-    engine.cast_vote('user1', 'example_proposal', 1)
-    engine.cast_vote('user2', 'example_proposal', -1)
-
-    engine.execute_proposal('example_proposal')
+    id: int
+    title: str
+    description: str
+    creator: str
+    start_time: datetime
+    end_time: datetime
+    min_weight_required: float
+    votes: List[Vote]
+    
+class GovernanceSystem:
+    def __init__(self):
+        self.proposals: Dict[int, Proposal] = {}
+        self.delegations: Dict[str, str] = {}  # voter -> delegate
+        self.voting_weights: Dict[str, float] = {}
+        self._next_proposal_id: int = 0
+        
+    def create_proposal(self, title: str, description: str, creator: str,
+                       start_time: datetime, end_time: datetime,
+                       min_weight_required: float = 0.0) -> int:
+        proposal_id = self._next_proposal_id
+        self._next_proposal_id += 1
+        
+        self.proposals[proposal_id] = Proposal(
+            id=proposal_id,
+            title=title,
+            description=description,
+            creator=creator,
+            start_time=start_time,
+            end_time=end_time,
+            min_weight_required=min_weight_required,
+            votes=[]
+        )
+        return proposal_id
+    
+    def delegate_vote(self, voter: str, delegate: str) -> bool:
+        if voter == delegate:
+            return False
+        self.delegations[voter] = delegate
+        return True
+        
+    def get_effective_weight(self, voter: str) -> float:
+        base_weight = self.voting_weights.get(voter, 1.0)
+        delegated_weight = 0.0
+        
+        # Add weights from all accounts delegating to this voter
+        for delegator, delegate in self.delegations.items():
+            if delegate == voter:
+                delegated_weight += self.voting_weights.get(delegator, 1.0)
+                
+        return base_weight + delegated_weight
+    
+    def cast_vote(self, voter: str, proposal_id: int, choice: bool) -> bool:
+        if proposal_id not in self.proposals:
+            return False
+            
+        proposal = self.proposals[proposal_id]
+        now = datetime.now()
+        
+        if now < proposal.start_time or now > proposal.end_time:
+            return False
+            
+        # Check if voter already voted
+        for vote in proposal.votes:
+            if vote.voter == voter:
+                return False
+                
+        # Get effective voting weight including delegations
+        weight = self.get_effective_weight(voter)
+        
+        # Create and record the vote
+        vote = Vote(
+            voter=voter,
+            proposal_id=proposal_id,
+            vote_weight=weight,
+            timestamp=now,
+            choice=choice
+        )
+        proposal.votes.append(vote)
+        return True
+        
+    def get_proposal_result(self, proposal_id: int) -> Optional[Dict]:
+        if proposal_id not in self.proposals:
+            return None
+            
+        proposal = self.proposals[proposal_id]
+        yes_weight = 0.0
+        no_weight = 0.0
+        
+        for vote in proposal.votes:
+            if vote.choice:
+                yes_weight += vote.vote_weight
+            else:
+                no_weight += vote.vote_weight
+                
+        total_weight = yes_weight + no_weight
+        
+        if total_weight < proposal.min_weight_required:
+            status = 'Insufficient Participation'
+        elif yes_weight > no_weight:
+            status = 'Passed'
+        else:
+            status = 'Rejected'
+            
+        return {
+            'proposal_id': proposal_id,
+            'yes_weight': yes_weight,
+            'no_weight': no_weight,
+            'total_weight': total_weight,
+            'status': status
+        }
