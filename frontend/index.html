@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DAWN - Governance Made Fun!</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css">
+</head>
+<body class="bg-gradient-to-r from-purple-900 via-pink-800 to-red-900 text-white">
+    <div id="app" class="min-h-screen">
+        <!-- Floating Achievement Notifications -->
+        <div id="achievements" class="fixed top-4 right-4 z-50"></div>
+
+        <!-- Hero Section with Animated Particles -->
+        <div class="relative overflow-hidden h-screen">
+            <div id="particles-js" class="absolute inset-0"></div>
+            <div class="relative z-10 flex flex-col items-center justify-center h-full text-center px-4">
+                <h1 class="text-6xl font-bold mb-8 animate__animated animate__fadeInDown">DAWN</h1>
+                <p class="text-2xl mb-12 animate__animated animate__fadeInUp">Shape the future, earn rewards, become legendary!</p>
+                
+                <!-- Gamified Progress Bar -->
+                <div class="w-full max-w-md bg-white/10 rounded-full h-4 mb-8">
+                    <div id="progressBar" class="bg-gradient-to-r from-green-400 to-blue-500 h-4 rounded-full transition-all duration-500" style="width: 45%"></div>
+                </div>
+
+                <!-- Social Status Display -->
+                <div class="bg-white/20 p-6 rounded-lg backdrop-blur-lg mb-8 animate__animated animate__fadeIn">
+                    <h2 class="text-2xl font-bold mb-4">Your Impact Score: 🌟 1,337</h2>
+                    <div class="grid grid-cols-3 gap-4 text-center">
+                        <div class="p-2">
+                            <p class="text-xl font-bold">🏆 Level 42</p>
+                            <p class="text-sm">Governance Expert</p>
+                        </div>
+                        <div class="p-2">
+                            <p class="text-xl font-bold">👥 238</p>
+                            <p class="text-sm">Followers</p>
+                        </div>
+                        <div class="p-2">
+                            <p class="text-xl font-bold">💎 890</p>
+                            <p class="text-sm">DAWN Tokens</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Action Cards -->
+                <div class="grid md:grid-cols-3 gap-6 w-full max-w-4xl px-4">
+                    <div class="bg-white/10 p-6 rounded-lg backdrop-blur-lg hover:transform hover:scale-105 transition-all cursor-pointer">
+                        <h3 class="text-xl font-bold mb-2">🎯 Daily Quests</h3>
+                        <p>Complete governance tasks to earn rewards</p>
+                        <div class="mt-4 text-sm">3/5 completed today</div>
+                    </div>
+                    <div class="bg-white/10 p-6 rounded-lg backdrop-blur-lg hover:transform hover:scale-105 transition-all cursor-pointer">
+                        <h3 class="text-xl font-bold mb-2">🤝 Team Challenges</h3>
+                        <p>Join forces to achieve bigger goals</p>
+                        <div class="mt-4 text-sm">2 active teams</div>
+                    </div>
+                    <div class="bg-white/10 p-6 rounded-lg backdrop-blur-lg hover:transform hover:scale-105 transition-all cursor-pointer">
+                        <h3 class="text-xl font-bold mb-2">🎮 Power Ups</h3>
+                        <p>Boost your influence with special items</p>
+                        <div class="mt-4 text-sm">4 available</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Social Feed Modal -->
+    <div id="socialFeed" class="fixed bottom-0 right-0 m-4 bg-white/10 backdrop-blur-lg rounded-lg p-4 w-80">
+        <h3 class="text-lg font-bold mb-2">🔥 Live Activity</h3>
+        <div class="space-y-2 max-h-60 overflow-y-auto">
+            <div class="animate__animated animate__fadeInRight">
+                <p>🌟 @CryptoKing just reached Level 50!</p>
+            </div>
+            <div class="animate__animated animate__fadeInRight">
+                <p>💪 @Web3Queen proposed a new initiative</p>
+            </div>
+            <div class="animate__animated animate__fadeInRight">
+                <p>🎉 Team Alpha completed their challenge!</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/particles.js/2.0.0/particles.min.js"></script>
+    <script>
+        // Initialize particle effects
+        particlesJS('particles-js', {
+            particles: {
+                number: { value: 80 },
+                color: { value: '#ffffff' },
+                shape: { type: 'circle' },
+                opacity: { value: 0.5 },
+                size: { value: 3 },
+                move: { enable: true, speed: 2 }
+            }
+        });
+
+        // Simulate achievement notifications
+        setInterval(() => {
+            const achievements = document.getElementById('achievements');
+            const achievement = document.createElement('div');
+            achievement.className = 'bg-green-500 text-white p-4 rounded-lg mb-2 animate__animated animate__fadeInRight';
+            achievement.innerHTML = '🎉 Achievement Unlocked: Early Adopter!';
+            achievements.appendChild(achievement);
+            setTimeout(() => achievement.remove(), 3000);
+        }, 15000);
+
+        // Update progress bar randomly
+        setInterval(() => {
+            const progress = Math.random() * 100;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+        }, 5000);
+    </script>
+</body>
+</html>
