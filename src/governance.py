@@ -1,102 +1,60 @@
-from enum import Enum
-from typing import Dict, List, Optional
-from datetime import datetime, timedelta
-
-class ProposalState(Enum):
-    DRAFT = 'draft'
-    ACTIVE = 'active' 
-    PASSED = 'passed'
-    FAILED = 'failed'
-    EXECUTED = 'executed'
-    CANCELED = 'canceled'
+import datetime
+import hashlib
+import json
 
 class Proposal:
-    def __init__(self, id: str, title: str, description: str, creator: str):
-        self.id = id
+    def __init__(self, title, description, author, start_time, end_time):
         self.title = title
         self.description = description
-        self.creator = creator
-        self.state = ProposalState.DRAFT
-        self.votes_for = 0
-        self.votes_against = 0
-        self.created_at = datetime.now()
-        self.voting_ends_at: Optional[datetime] = None
-        self.executed_at: Optional[datetime] = None
-        self.min_voting_power = 100  # Configurable threshold
-        self.required_quorum = 0.4  # 40% participation required
+        self.author = author
+        self.start_time = start_time
+        self.end_time = end_time
+        self.votes = {}
+        self.hash = self.compute_hash()
 
-    def activate(self) -> bool:
-        if self.state != ProposalState.DRAFT:
-            return False
-        self.state = ProposalState.ACTIVE
-        self.voting_ends_at = datetime.now() + timedelta(days=7)
-        return True
+    def compute_hash(self):
+        data = {
+            'title': self.title,
+            'description': self.description,
+            'author': self.author,
+            'start_time': self.start_time,
+            'end_time': self.end_time
+        }
+        return hashlib.sha256(json.dumps(data, sort_keys=True).encode()).hexdigest()
 
-    def vote(self, voter: str, voting_power: int, support: bool) -> bool:
-        if self.state != ProposalState.ACTIVE:
-            return False
-        if datetime.now() > self.voting_ends_at:
-            return False
-            
-        if support:
-            self.votes_for += voting_power
-        else:
-            self.votes_against += voting_power
-        return True
+    def add_vote(self, voter, vote):
+        self.votes[voter] = vote
 
-    def finalize(self, total_voting_power: int) -> bool:
-        if self.state != ProposalState.ACTIVE:
-            return False
-        if datetime.now() < self.voting_ends_at:
-            return False
+    def get_vote_count(self, vote_type):
+        return sum(1 for v in self.votes.values() if v == vote_type)
 
-        total_votes = self.votes_for + self.votes_against
-        participation = total_votes / total_voting_power
+    def is_active(self):
+        now = datetime.datetime.now()
+        return self.start_time <= now <= self.end_time
 
-        if participation < self.required_quorum:
-            self.state = ProposalState.FAILED
-            return True
-
-        if self.votes_for > self.votes_against:
-            self.state = ProposalState.PASSED
-        else:
-            self.state = ProposalState.FAILED
-        return True
-
-    def execute(self) -> bool:
-        if self.state != ProposalState.PASSED:
-            return False
-        self.state = ProposalState.EXECUTED
-        self.executed_at = datetime.now()
-        return True
-
-    def cancel(self) -> bool:
-        if self.state in [ProposalState.EXECUTED, ProposalState.CANCELED]:
-            return False
-        self.state = ProposalState.CANCELED
-        return True
-
-class GovernanceSystem:
+class VotingSystem:
     def __init__(self):
-        self.proposals: Dict[str, Proposal] = {}
-        self.next_proposal_id = 1
-        self.total_voting_power = 1000  # Example fixed total
+        self.proposals = []
 
-    def create_proposal(self, title: str, description: str, creator: str) -> str:
-        proposal_id = str(self.next_proposal_id)
-        self.next_proposal_id += 1
-        
-        proposal = Proposal(proposal_id, title, description, creator)
-        self.proposals[proposal_id] = proposal
-        return proposal_id
+    def create_proposal(self, title, description, author, start_time, end_time):
+        proposal = Proposal(title, description, author, start_time, end_time)
+        self.proposals.append(proposal)
+        return proposal
 
-    def get_proposal(self, proposal_id: str) -> Optional[Proposal]:
-        return self.proposals.get(proposal_id)
+    def cast_vote(self, proposal_hash, voter, vote):
+        for proposal in self.proposals:
+            if proposal.hash == proposal_hash:
+                proposal.add_vote(voter, vote)
+                return
+        raise ValueError(f'Proposal with hash {proposal_hash} not found.')
 
-    def get_active_proposals(self) -> List[Proposal]:
-        return [p for p in self.proposals.values() if p.state == ProposalState.ACTIVE]
+    def get_proposal_result(self, proposal_hash):
+        for proposal in self.proposals:
+            if proposal.hash == proposal_hash:
+                yes_votes = proposal.get_vote_count('yes')
+                no_votes = proposal.get_vote_count('no')
+                return yes_votes > no_votes
+        raise ValueError(f'Proposal with hash {proposal_hash} not found.')
 
-    def process_expired_proposals(self):
-        for proposal in self.get_active_proposals():
-            if datetime.now() > proposal.voting_ends_at:
-                proposal.finalize(self.total_voting_power)
+    def get_active_proposals(self):
+        return [p for p in self.proposals if p.is_active()]
